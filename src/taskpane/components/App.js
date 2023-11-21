@@ -134,7 +134,7 @@ export default class App extends React.Component {
                 color={this.state.isStreamingPage ? "taskpane_header_selected" : "taskpane_header"}
                 variant="contained"
                 size="large"
-                style={{ borderRadius: "10px 0px 0px 10px", height: "50px", width: "90px", fontSize: "13px" }}
+                style={{ borderRadius: "10px 0px 0px 10px", height: "50px", width: "100px", fontSize: "13px" }}
                 onClick={this.handleStreamingButton}
               >
                 <MicNoneOutlinedIcon fontSize="small" style={{ margin: "1px" }} />
@@ -144,7 +144,7 @@ export default class App extends React.Component {
                 color={this.state.isRecordPage ? "taskpane_header_selected" : "taskpane_header"}
                 variant="contained"
                 size="large"
-                style={{ borderRadius: "0px", height: "50px", width: "90px", fontSize: "13px" }}
+                style={{ borderRadius: "0px", height: "50px", width: "100px", fontSize: "13px" }}
                 onClick={this.handleRecordButton}
               >
                 <HeadsetOutlinedIcon fontSize="small" style={{ margin: "1px" }} />
