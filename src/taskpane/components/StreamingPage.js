@@ -13,6 +13,7 @@ import Button from "@mui/material/Button";
 import smallMic from "../../../assets/smallMic.png";
 import stopButton from "../../../assets/stopButton.png";
 import Chip from "@mui/material/Chip";
+import { printInPowerPoint } from "../../../modules/powerpointFunction";
 
 export default class VoiceRecorderPage extends React.Component {
   constructor(props, context) {
@@ -28,6 +29,7 @@ export default class VoiceRecorderPage extends React.Component {
     this.wavFile = null;
     this.socket = null;
     this.stream = null;
+    this.audioSendInterval = null;
     this.state = {
       listItems: [],
       isRecording: false,
@@ -35,6 +37,8 @@ export default class VoiceRecorderPage extends React.Component {
       isLoading: false,
       isSocketConnected: false,
       recordingTime: 0,
+      index: 0,
+      endOfStream: false,
     };
   }
 
@@ -44,7 +48,7 @@ export default class VoiceRecorderPage extends React.Component {
    * "result" event is a listen event to keep listening the responses
    */
   initializeSocket = () => {
-    this.socket = io(process.env.SOCKET_ADDRESS, { transports: ["websocket"] });
+    this.socket = io(process.env.SOCKET_ADDRESS, { transports: ["websocket"], rejectUnauthorized: false });
     this.socket.on("connect", () => {
       console.log("Socket connected");
       this.setState({ isSocketConnected: true });
@@ -52,12 +56,28 @@ export default class VoiceRecorderPage extends React.Component {
     this.socket.on("result", (data) => {
       console.log("Received result:", data);
       console.log(data.text);
-      this.printInPowerPoint(data.text);
+      let res = "";
+      if (data.chunk == "small_chunk") {
+      for (let wordData of data.output.predicted_words) {
+        let word = wordData.word;
+        let isConfident = wordData.is_confident;
+
+        if (!isConfident && word !== " ") {
+          res += word;
+        } else {
+          res += word;
+        }
+      }
+    }
+      console.log(res);
+      if (res !== "" && res !== " "){
+        printInPowerPoint(res);
+      }
     });
     this.socket.on("last_result", (data) => {
       console.log("Received last result:", data);
       console.log(data.text);
-      this.printInPowerPoint(data.text);
+      printInPowerPoint(data.text);
     });
   };
 
@@ -68,25 +88,35 @@ export default class VoiceRecorderPage extends React.Component {
     }
   }
 
+  componentWillUnmount() {
+    if(this.state.isRecording == true){
+      this.handleStop();
+    }
+  }
+
   /**
    * Handles Start Recording Button
    * Interval time is set to 500ms
    */
   handleStartButton = async () => {
+    this.setState({ index: 0, endOfStream: false });
+    if (this.socket.connected == true) {
+      this.socket.disconnect();
+      this.socket.connect(); 
+    }
     this.startTimer();
     if (this.state.isSocketConnected == false) {
       this.initializeSocket();
     }
-    const permissionStatus = await navigator.permissions.query({ name: "microphone" });
-    if (permissionStatus.state === "granted") {
-      console.log("Granted");
-    } else {
-      console.log("Not granted");
-    }
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.setState({ isRecording: true });
     this.sendAudioFileSocketIO();
-    setInterval(() => {
+
+    if (this.audioSendInterval) {
+      clearInterval(this.audioSendInterval);
+    }
+    
+    this.audioSendInterval = setInterval(() => {
       this.sendAudioFileSocketIO();
     }, process.env.STREAMING_CHUNK_SIZE_IN_MILLISECOND);
   };
@@ -103,9 +133,13 @@ export default class VoiceRecorderPage extends React.Component {
       const reader = new FileReader();
       reader.onload = (event) => {
         const base64String = window.btoa(event.target.result);
+        console.log("Sending chunk: ", this.state.index, "End of Stream: ", this.state.endOfStream); 
         this.socket.emit("audio_transmit", {
-          file: base64String,
+          index: this.state.index,
+          audio: base64String,
+          endOfStream: this.state.endOfStream,
         });
+        this.setState({ index: this.state.index + 1 });
       };
       try {
         reader.readAsBinaryString(this.wavFile);
@@ -120,31 +154,6 @@ export default class VoiceRecorderPage extends React.Component {
   };
 
   /**
-   * Prints the received response from the socket to MS Word
-   * Texts are printed from the current cursor position
-   * Prints only the first result from the response
-   * As the first response is the best prediction
-   * @param {string} text
-   */
-  printInPowerPoint = async (text) => {
-    await PowerPoint.run(async (context) => {
-      const shapes = context.presentation.getSelectedShapes();
-      const shapeCount = shapes.getCount();
-      await context.sync();
-      shapes.load("items");
-      await context.sync();
-      shapes.items.map(async (shape, index) => {
-        console.log(shape.id);
-        shape.load("textFrame/textRange");
-        await context.sync();
-        const textRange = shape.textFrame.textRange;
-        textRange.text = textRange.text + " " + text;
-        await context.sync();
-      });
-    });
-  };
-
-  /**
    * Handles Stop Recording button
    */
   handleStop = () => {
@@ -152,12 +161,20 @@ export default class VoiceRecorderPage extends React.Component {
       endOfStream: true,
     });
     this.stopTimer();
-    this.socket.disconnect(() => {
-      console.log("Socket disconnected");
-    });
+
+    if (this.audioSendInterval) {
+      clearInterval(this.audioSendInterval);
+      this.audioSendInterval = null; // Reset the interval ID
+    }
+
+
+    // this.socket.disconnect(() => {
+    //   console.log("Socket disconnected");
+    // });
     this.setState({
       isRecording: false,
-      isSocketConnected: false,
+      // isSocketConnected: false,
+      endOfStream: true,
     });
     if (this.stream) {
       const tracks = this.stream.getTracks();
