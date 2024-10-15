@@ -4,7 +4,7 @@
   <Version>1.0.0.0</Version>
   <ProviderName>Wasiul Haque</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="কথা MacOS"/>
+  <DisplayName DefaultValue="কথা"/>
   <Description DefaultValue="Speech to Text MS Word Addin"/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>

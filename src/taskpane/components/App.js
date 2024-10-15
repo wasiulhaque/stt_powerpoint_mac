@@ -140,16 +140,7 @@ export default class App extends React.Component {
                 <MicNoneOutlinedIcon fontSize="small" style={{ margin: "1px" }} />
                 বলুন
               </Button>
-              <Button
-                color={this.state.isRecordPage ? "taskpane_header_selected" : "taskpane_header"}
-                variant="contained"
-                size="large"
-                style={{ borderRadius: "0px", height: "50px", width: "100px", fontSize: "13px" }}
-                onClick={this.handleRecordButton}
-              >
-                <HeadsetOutlinedIcon fontSize="small" style={{ margin: "1px" }} />
-                রেকর্ড
-              </Button>
+
               <FileUploaderPage />
             </Stack>
             {this.state.isRecordPage ? <RecordPage /> : ""}
