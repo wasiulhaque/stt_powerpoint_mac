@@ -4,7 +4,7 @@ import { DefaultButton, Icon } from "@fluentui/react";
 import Header from "./Header";
 import App from "./App";
 import Stack from "@mui/material/Stack";
-import { audioBufferToWav, fileToAudioBuffer } from "../../../modules/chunkify";
+import { audioBufferToWav, fileToAudioBuffer } from "../../../modules/chunkify"
 import io from "socket.io-client";
 import MicIcon from "@mui/icons-material/Mic";
 import StopIcon from "@mui/icons-material/Stop";
@@ -13,6 +13,9 @@ import Button from "@mui/material/Button";
 import smallMic from "../../../assets/smallMic.png";
 import stopButton from "../../../assets/stopButton.png";
 import Chip from "@mui/material/Chip";
+import Snackbar from "@mui/material/Snackbar"
+import Alert from "@mui/material/Alert";
+import { sendRequest } from "../../../modules/CommonFunctions";
 import { printInPowerPoint } from "../../../modules/powerpointFunction";
 
 export default class VoiceRecorderPage extends React.Component {
@@ -33,12 +36,13 @@ export default class VoiceRecorderPage extends React.Component {
     this.state = {
       listItems: [],
       isRecording: false,
-      recordingTime: 0,
+      recordingTime: 120,
       isLoading: false,
       isSocketConnected: false,
-      recordingTime: 0,
       index: 0,
       endOfStream: false,
+      snackbarMessage: "",
+      streamingTimeout: false,
     };
   }
 
@@ -57,7 +61,7 @@ export default class VoiceRecorderPage extends React.Component {
       console.log("Received result:", data);
       console.log(data.text);
       let res = "";
-      if (data.chunk == "small_chunk") {
+      if (data.chunk == "large_chunk") {
       for (let wordData of data.output.predicted_words) {
         let word = wordData.word;
         let isConfident = wordData.is_confident;
@@ -71,7 +75,12 @@ export default class VoiceRecorderPage extends React.Component {
     }
       console.log(res);
       if (res !== "" && res !== " "){
-        printInPowerPoint(res);
+        // Send and receive the response from the punctuation API
+        sendRequest(res).then((data) => {
+          console.log(data);
+          res = data.punctuated_text;
+          printInPowerPoint(res);
+        });
       }
     });
     this.socket.on("last_result", (data) => {
@@ -93,6 +102,13 @@ export default class VoiceRecorderPage extends React.Component {
       this.handleStop();
     }
   }
+
+  handleCloseSnackbar = (event, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    this.setState({ streamingTimeout: false });
+  };
 
   /**
    * Handles Start Recording Button
@@ -154,6 +170,27 @@ export default class VoiceRecorderPage extends React.Component {
   };
 
   /**
+   * Prints the received response from the socket to MS Word
+   * Texts are printed from the current cursor position
+   * Prints only the first result from the response
+   * As the first response is the best prediction
+   * @param {string} text
+   */
+  printInWord = async (text) => {
+    Word.run(async (context) => {
+      var selection = context.document.getSelection();
+      var insertText = text.split("|");
+      selection.insertText(insertText[0]);
+      selection.insertText(" ");
+      const range = selection.getRange("end");
+      range.select();
+      await context.sync();
+    }).catch(function (error) {
+      console.error(error);
+    });
+  };
+
+  /**
    * Handles Stop Recording button
    */
   handleStop = () => {
@@ -189,7 +226,7 @@ export default class VoiceRecorderPage extends React.Component {
   startTimer = () => {
     this.timeInterval = setInterval(() => {
       this.setState((prevState) => ({
-        recordingTime: prevState.recordingTime + 1,
+        recordingTime: prevState.recordingTime - 1,
       }));
     }, 1000);
   };
@@ -199,13 +236,18 @@ export default class VoiceRecorderPage extends React.Component {
    */
   stopTimer = () => {
     clearInterval(this.timeInterval);
-    this.setState({ recordingTime: 0 });
+    this.setState({ recordingTime: 120 });
   };
 
   /**
    * Formats the time for the timer
    */
   formatTime = (timeInSeconds) => {
+    if (timeInSeconds == 0) {
+      this.handleStop();
+      this.setState({ streamingTimeout: true });
+      this.setState({ snackbarMessage: "দুঃখিত, ২ মিনিট অতিক্রান্ত হয়েছে।\nরিসেট করে পুনরায় শুরু করুন।" });
+    }
     const minutes = Math.floor(timeInSeconds / 60);
     const seconds = timeInSeconds % 60;
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
@@ -222,6 +264,8 @@ export default class VoiceRecorderPage extends React.Component {
 
   render() {
     const { isGoBack, isRecording, recordingTime } = this.state;
+    const { streamingTimeout } = this.state;
+    const { snackbarMessage } = this.state;
     if (isGoBack) {
       return <App />;
     }
@@ -254,14 +298,16 @@ export default class VoiceRecorderPage extends React.Component {
               </>
             )}
           </Button>
-
-          {/* <DefaultButton
-            className="ms-wecome__action ms-button-uniform"
-            onClick={this.handleStop}
-            disabled={!isRecording}
+          <Snackbar
+            open={streamingTimeout}
+            autoHideDuration={2500}
+            onClose={this.handleCloseSnackbar}
+            anchorOrigin={{ vertical: "top", horizontal: "center" }}
           >
-            <StopIcon />
-          </DefaultButton> */}
+            <Alert onClose={this.handleCloseSnackbar} severity="error" variant="filled" sx={{ width: "100%" }}>
+              {snackbarMessage}
+            </Alert>
+          </Snackbar>
         </Stack>
       </div>
     );
