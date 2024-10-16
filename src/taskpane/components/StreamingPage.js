@@ -79,6 +79,7 @@ export default class VoiceRecorderPage extends React.Component {
         sendRequest(res).then((data) => {
           console.log(data);
           res = data.punctuated_text;
+          console.log("Here");
           printInPowerPoint(res);
         });
       }
